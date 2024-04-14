@@ -13,12 +13,14 @@ use syn::{
 };
 
 use crate::rule_param_type::RuleParamType;
+use crate::write::write_tag;
 
 pub(crate) mod arg;
 pub(crate) mod rule_input;
 pub(crate) mod rule_param;
 pub(crate) mod rule_param_field;
 pub(crate) mod rule_param_type;
+pub(crate) mod serialize;
 
 pub(crate) mod kw {
     syn::custom_keyword!(name);
@@ -173,7 +175,6 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 writer.write_event(::quick_xml::events::Event::End(
                         ::quick_xml::events::BytesEnd::new("myRule")))?;
 
-
                 writer.write_event(::quick_xml::events::Event::Start(
                         ::quick_xml::events::BytesStart::new("RHostAddr_PI")))?;
                 writer.write_event(::quick_xml::events::Event::Start(
@@ -194,6 +195,7 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 ::std::write!(writer.get_mut(), "{}", self.addr.port())?;
                 writer.write_event(::quick_xml::events::Event::End(
                         ::quick_xml::events::BytesEnd::new("port")))?;
+
 
                 writer.write_event(::quick_xml::events::Event::Start(
                         ::quick_xml::events::BytesStart::new("dummyInt")))?;
