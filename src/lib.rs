@@ -1,14 +1,18 @@
-use proc_macro::TokenStream;
-use quote::quote;
+use std::fmt::format;
 
+use proc_macro::TokenStream;
+
+use quote::quote;
 use rule_input::RuleInput;
 use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
     token::{Brace, Bracket},
-    LitStr, Token,
+    Ident, LitStr, Token,
 };
+
+use crate::rule_param_type::RuleParamType;
 
 pub(crate) mod arg;
 pub(crate) mod rule_input;
@@ -32,5 +36,30 @@ pub(crate) mod kw {
 pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(tokens as RuleInput);
 
-    TokenStream::new()
+    let input_struct_name = Ident::new(
+        &format!("{}__Rule__Input", input.name.value()),
+        input.name.span(),
+    );
+
+    let input_struct_params = input
+        .params
+        .iter()
+        .map(|param| {
+            let param_name = Ident::new(&param.label.value(), param.label.span());
+            let param_type = match &param.param_type {
+                RuleParamType::String => quote! { String },
+            };
+            quote! {
+                #param_name: #param_type,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let out = quote! {
+        pub struct #input_struct_name {
+            #(#input_struct_params)*
+        }
+    };
+
+    TokenStream::from(out)
 }
