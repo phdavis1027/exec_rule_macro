@@ -41,6 +41,10 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
         input.name.span(),
     );
 
+    let output_struct_name = Ident::new(&format!("{}", input.output.value()), input.name.span());
+    let output_struct_name_lit_str =
+        LitStr::new(&format!("{}", input.output.value()), input.name.span());
+
     let input_struct_params = input
         .params
         .iter()
@@ -66,20 +70,77 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
         })
         .collect::<Vec<_>>();
 
+    let ms_param_array_len = LitStr::new(
+        format!("{}", input.params.len()).as_str(),
+        input.name.span(),
+    );
+
     let rule_body = LitStr::new(
         format!(
-            r##"
-    @external
+            "@external
     {} {{
         {}        
-    }}
-    "##,
+    }}\
+    ",
             input.name.value(),
             input.body.value()
         )
         .as_str(),
         input.body.span(),
     );
+
+    let param_write_commands = input
+        .params
+        .iter()
+        .map(|param| {
+            let param_label_lit = LitStr::new(
+                format!("*{}", &param.label.value()).as_str(),
+                param.label.span(),
+            );
+            let param_name_ident = Ident::new(&param.label.value(), param.label.span());
+            match param.param_type {
+                RuleParamType::String => {
+                    quote! {
+
+                        writer.write_event(::quick_xml::events::Event::Start(
+                                ::quick_xml::events::BytesStart::new("MsParam_PI")))?;
+
+                        writer.write_event(::quick_xml::events::Event::Start(
+                                ::quick_xml::events::BytesStart::new("label")))?;
+                        writer.write_event(::quick_xml::events::Event::Text(
+                                ::quick_xml::events::BytesText::new(#param_label_lit)))?;
+                        writer.write_event(::quick_xml::events::Event::End(
+                                ::quick_xml::events::BytesEnd::new("label")))?;
+
+                        writer.write_event(::quick_xml::events::Event::Start(
+                                ::quick_xml::events::BytesStart::new("type")))?;
+                        writer.write_event(::quick_xml::events::Event::Text(
+                                ::quick_xml::events::BytesText::new("STR_PI")))?;
+                        writer.write_event(::quick_xml::events::Event::End(
+                                ::quick_xml::events::BytesEnd::new("type")))?;
+
+
+                        writer.write_event(::quick_xml::events::Event::Start(
+                                ::quick_xml::events::BytesStart::new("STR_PI")))?;
+                        writer.write_event(::quick_xml::events::Event::Start(
+                                ::quick_xml::events::BytesStart::new("myStr")))?;
+                        writer.write_event(::quick_xml::events::Event::Text(
+                                ::quick_xml::events::BytesText::new(&self.#param_name_ident)))?;
+                        writer.write_event(::quick_xml::events::Event::End(
+                                ::quick_xml::events::BytesEnd::new("myStr")))?;
+                        writer.write_event(::quick_xml::events::Event::End(
+                                ::quick_xml::events::BytesEnd::new("STR_PI")))?;
+
+                        writer.write_event(::quick_xml::events::Event::End(
+                                ::quick_xml::events::BytesEnd::new("STR_PI")))?;
+
+                        writer.write_event(::quick_xml::events::Event::End(
+                                ::quick_xml::events::BytesEnd::new("MsParam_PI")))?;
+                    }
+                }
+            }
+        })
+        .collect::<Vec<_>>();
 
     let out = quote! {
         #[derive(Debug)]
@@ -106,11 +167,11 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
                         ::quick_xml::events::BytesStart::new("ExecMyRuleInp_PI")))?;
 
                 writer.write_event(::quick_xml::events::Event::Start(
-                    ::quick_xml::events::BytesStart::new("myRule")))?;
+                        ::quick_xml::events::BytesStart::new("myRule")))?;
                 writer.write_event(::quick_xml::events::Event::Text(
-                    ::quick_xml::events::BytesText::new(#rule_body)))?;
+                        ::quick_xml::events::BytesText::new(#rule_body)))?;
                 writer.write_event(::quick_xml::events::Event::End(
-                    ::quick_xml::events::BytesEnd::new("myRule")))?;
+                        ::quick_xml::events::BytesEnd::new("myRule")))?;
 
 
                 writer.write_event(::quick_xml::events::Event::Start(
@@ -124,7 +185,7 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 writer.write_event(::quick_xml::events::Event::Start(
                         ::quick_xml::events::BytesStart::new("rodsZone")))?;
                 writer.write_event(::quick_xml::events::Event::Text(
-                    ::quick_xml::events::BytesText::new(self.rods_zone.as_str())))?;
+                        ::quick_xml::events::BytesText::new(self.rods_zone.as_str())))?;
                 writer.write_event(::quick_xml::events::Event::End(
                         ::quick_xml::events::BytesEnd::new("rodsZone")))?;
 
@@ -137,7 +198,7 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 writer.write_event(::quick_xml::events::Event::Start(
                         ::quick_xml::events::BytesStart::new("dummyInt")))?;
                 writer.write_event(::quick_xml::events::Event::Text(
-                    ::quick_xml::events::BytesText::new("0")))?;
+                        ::quick_xml::events::BytesText::new("0")))?;
                 writer.write_event(::quick_xml::events::Event::End(
                         ::quick_xml::events::BytesEnd::new("dummyInt")))?;
 
@@ -147,24 +208,28 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 if let Some(inst) = &self.instance {
                     writer.write_event(::quick_xml::events::Event::Start(
                             ::quick_xml::events::BytesStart::new("KeyValPair_PI")))?;
+
                     writer.write_event(::quick_xml::events::Event::Start(
                             ::quick_xml::events::BytesStart::new("ssLen")))?;
                     writer.write_event(::quick_xml::events::Event::Text(
-                        ::quick_xml::events::BytesText::new("1")))?;
+                            ::quick_xml::events::BytesText::new("1")))?;
                     writer.write_event(::quick_xml::events::Event::End(
                             ::quick_xml::events::BytesEnd::new("ssLen")))?;
+
                     writer.write_event(::quick_xml::events::Event::Start(
                             ::quick_xml::events::BytesStart::new("keyWord")))?;
                     writer.write_event(::quick_xml::events::Event::Text(
-                        ::quick_xml::events::BytesText::new("instance_name")))?;
+                            ::quick_xml::events::BytesText::new("instance_name")))?;
                     writer.write_event(::quick_xml::events::Event::End(
                             ::quick_xml::events::BytesEnd::new("keyWord")))?;
+
                     writer.write_event(::quick_xml::events::Event::Start(
                             ::quick_xml::events::BytesStart::new("svalue")))?;
                     writer.write_event(::quick_xml::events::Event::Text(
-                        ::quick_xml::events::BytesText::new(&self.instance)))?;
+                            ::quick_xml::events::BytesText::new(inst.as_str())))?;
                     writer.write_event(::quick_xml::events::Event::End(
                             ::quick_xml::events::BytesEnd::new("svalue")))?;
+
                     writer.write_event(::quick_xml::events::Event::End(
                             ::quick_xml::events::BytesEnd::new("KeyValPair_PI")))?;
                 } else {
@@ -173,7 +238,7 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
                     writer.write_event(::quick_xml::events::Event::Start(
                             ::quick_xml::events::BytesStart::new("ssLen")))?;
                     writer.write_event(::quick_xml::events::Event::Text(
-                        ::quick_xml::events::BytesText::new("0")))?;
+                            ::quick_xml::events::BytesText::new("0")))?;
                     writer.write_event(::quick_xml::events::Event::End(
                             ::quick_xml::events::BytesEnd::new("ssLen")))?;
                     writer.write_event(::quick_xml::events::Event::End(
@@ -182,8 +247,33 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 
                 writer.write_event(::quick_xml::events::Event::Start(
+                        ::quick_xml::events::BytesStart::new("outParamDesc")))?;
+                writer.write_event(::quick_xml::events::Event::Text(
+                        ::quick_xml::events::BytesText::new(#output_struct_name_lit_str)))?;
+                writer.write_event(::quick_xml::events::Event::End(
+                        ::quick_xml::events::BytesEnd::new("outParamDesc")))?;
+
+
+                writer.write_event(::quick_xml::events::Event::Start(
                         ::quick_xml::events::BytesStart::new("MsParamArray_PI")))?;
 
+
+                writer.write_event(::quick_xml::events::Event::Start(
+                        ::quick_xml::events::BytesStart::new("paramLen")))?;
+                writer.write_event(::quick_xml::events::Event::Text(
+                        ::quick_xml::events::BytesText::new(#ms_param_array_len)))?;
+                writer.write_event(::quick_xml::events::Event::End(
+                        ::quick_xml::events::BytesEnd::new("paramLen")))?;
+
+                writer.write_event(::quick_xml::events::Event::Start(
+                        ::quick_xml::events::BytesStart::new("oprType")))?;
+                writer.write_event(::quick_xml::events::Event::Text(
+                        ::quick_xml::events::BytesText::new("0")))?;
+                writer.write_event(::quick_xml::events::Event::End(
+                        ::quick_xml::events::BytesEnd::new("oprType")))?;
+
+
+                #(#param_write_commands)*
 
                 writer.write_event(::quick_xml::events::Event::End(
                         ::quick_xml::events::BytesEnd::new("MsParamArray_PI")))?;
