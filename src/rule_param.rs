@@ -1,14 +1,177 @@
-use crate::{rule_param_field::RuleParamField, rule_param_type::RuleParamType};
+use crate::{
+    rule_param_field::RuleParamField,
+    rule_param_type::RuleParamType,
+    serialize::{write_end, write_start, write_tag, write_tag_fmt},
+};
+use proc_macro2::TokenStream;
+use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     token::Brace,
-    LitStr, Token,
+    Ident, LitStr, Token,
 };
 
 pub(crate) struct RuleParam {
     pub label: LitStr,
     pub param_type: RuleParamType,
+}
+
+fn write_string_value(label: &LitStr) -> TokenStream {
+    let start = write_start("STR_PI");
+    let end = write_end("STR_PI");
+
+    let field = Ident::new(label.value().as_str(), label.span());
+
+    let value = write_tag(
+        "myStr",
+        quote! {
+            self.#field.as_str()
+        },
+    );
+
+    quote! {
+        #start
+
+        #value
+
+        #end
+    }
+}
+
+fn write_byte_value(label: &LitStr) -> TokenStream {
+    let start = write_start("CHAR_PI");
+    let end = write_end("CHAR_PI");
+
+    let field = Ident::new(label.value().as_str(), label.span());
+
+    let value = write_tag_fmt(
+        "myChar",
+        LitStr::new("{}", label.span()),
+        quote! {
+            self.#field
+        },
+    );
+
+    quote! {
+        #start
+
+        #value
+
+        #end
+    }
+}
+
+fn write_int16_value(label: &LitStr) -> TokenStream {
+    let start = write_start("INT16_PI");
+    let end = write_end("INT16_PI");
+
+    let field = Ident::new(label.value().as_str(), label.span());
+
+    let value = write_tag_fmt(
+        "myInt",
+        LitStr::new("{}", label.span()),
+        quote! {
+            self.#field
+        },
+    );
+
+    quote! {
+        #start
+
+        #value
+
+        #end
+    }
+}
+
+fn write_int32_value(label: &LitStr) -> TokenStream {
+    let start = write_start("INT_PI");
+    let end = write_end("INT_PI");
+
+    let field = Ident::new(label.value().as_str(), label.span());
+
+    let value = write_tag_fmt(
+        "myInt",
+        LitStr::new("{}", label.span()),
+        quote! {
+            self.#field
+        },
+    );
+
+    quote! {
+        #start
+
+        #value
+
+        #end
+    }
+}
+
+fn write_double_value(label: &LitStr) -> TokenStream {
+    let start = write_start("DOUBLE_PI");
+    let end = write_end("DOUBLE_PI");
+
+    let field = Ident::new(label.value().as_str(), label.span());
+
+    let value = write_tag_fmt(
+        "myDouble",
+        LitStr::new("{}", label.span()),
+        quote! {
+            self.#field
+        },
+    );
+
+    quote! {
+        #start
+
+        #value
+
+        #end
+    }
+}
+
+impl RuleParam {
+    pub fn tokify(param: &Self) -> TokenStream {
+        let start = write_start("MsParam_PI");
+        let end = write_end("MsParam_PI");
+
+        let label = write_tag(
+            "label",
+            LitStr::new(
+                format!("*{}", param.label.value()).as_str(),
+                param.label.span(),
+            ),
+        );
+
+        let param_type = match param.param_type {
+            RuleParamType::String => write_tag("type", LitStr::new("STR_PI", param.label.span())),
+            RuleParamType::Byte => write_tag("type", LitStr::new("CHAR_PI", param.label.span())),
+            RuleParamType::Int16 => write_tag("type", LitStr::new("INT16_PI", param.label.span())),
+            RuleParamType::Int32 => write_tag("type", LitStr::new("INT_PI", param.label.span())),
+            RuleParamType::Double => {
+                write_tag("type", LitStr::new("DOUBLE_PI", param.label.span()))
+            }
+        };
+
+        let value = match param.param_type {
+            RuleParamType::String => write_string_value(&param.label),
+            RuleParamType::Byte => write_byte_value(&param.label),
+            RuleParamType::Int16 => write_int16_value(&param.label),
+            RuleParamType::Int32 => write_int32_value(&param.label),
+            RuleParamType::Double => write_double_value(&param.label),
+        };
+
+        quote! {
+            #start
+
+            #label
+            #param_type
+            #value
+
+            #end
+        }
+    }
 }
 
 impl Parse for RuleParam {

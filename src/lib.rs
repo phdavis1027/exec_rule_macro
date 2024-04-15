@@ -13,9 +13,9 @@ use syn::{
 };
 
 use crate::rule_param_type::RuleParamType;
-use crate::write::write_tag;
 
 pub(crate) mod arg;
+pub(crate) mod input_struct;
 pub(crate) mod rule_input;
 pub(crate) mod rule_param;
 pub(crate) mod rule_param_field;
@@ -32,6 +32,10 @@ pub(crate) mod kw {
 
     // iRODS rule types
     syn::custom_keyword!(string);
+    syn::custom_keyword!(byte); // char is a keyword
+    syn::custom_keyword!(int16);
+    syn::custom_keyword!(int32);
+    syn::custom_keyword!(double);
 }
 
 #[proc_macro]
@@ -43,251 +47,15 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
         input.name.span(),
     );
 
-    let output_struct_name = Ident::new(&format!("{}", input.output.value()), input.name.span());
-    let output_struct_name_lit_str =
-        LitStr::new(&format!("{}", input.output.value()), input.name.span());
+    let fields = input_struct::expand_fields(&input);
 
-    let input_struct_params = input
-        .params
-        .iter()
-        .map(|param| {
-            let param_name = Ident::new(&param.label.value(), param.label.span());
-            let param_type = match &param.param_type {
-                RuleParamType::String => quote! { String },
-            };
-            quote! {
-                pub #param_name: #param_type,
-            }
-        })
-        .collect::<Vec<_>>();
+    let input_struct = input_struct::expand_input_struct(&input_struct_name, &fields);
 
-    let input_struct_param_labels = input
-        .params
-        .iter()
-        .map(|param| {
-            let param_name = Ident::new(&param.label.value(), param.label.span());
-            quote! {
-                #param_name,
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let ms_param_array_len = LitStr::new(
-        format!("{}", input.params.len()).as_str(),
-        input.name.span(),
-    );
-
-    let rule_body = LitStr::new(
-        format!(
-            "@external
-    {} {{
-        {}        
-    }}\
-    ",
-            input.name.value(),
-            input.body.value()
-        )
-        .as_str(),
-        input.body.span(),
-    );
-
-    let param_write_commands = input
-        .params
-        .iter()
-        .map(|param| {
-            let param_label_lit = LitStr::new(
-                format!("*{}", &param.label.value()).as_str(),
-                param.label.span(),
-            );
-            let param_name_ident = Ident::new(&param.label.value(), param.label.span());
-            match param.param_type {
-                RuleParamType::String => {
-                    quote! {
-
-                        writer.write_event(::quick_xml::events::Event::Start(
-                                ::quick_xml::events::BytesStart::new("MsParam_PI")))?;
-
-                        writer.write_event(::quick_xml::events::Event::Start(
-                                ::quick_xml::events::BytesStart::new("label")))?;
-                        writer.write_event(::quick_xml::events::Event::Text(
-                                ::quick_xml::events::BytesText::new(#param_label_lit)))?;
-                        writer.write_event(::quick_xml::events::Event::End(
-                                ::quick_xml::events::BytesEnd::new("label")))?;
-
-                        writer.write_event(::quick_xml::events::Event::Start(
-                                ::quick_xml::events::BytesStart::new("type")))?;
-                        writer.write_event(::quick_xml::events::Event::Text(
-                                ::quick_xml::events::BytesText::new("STR_PI")))?;
-                        writer.write_event(::quick_xml::events::Event::End(
-                                ::quick_xml::events::BytesEnd::new("type")))?;
-
-
-                        writer.write_event(::quick_xml::events::Event::Start(
-                                ::quick_xml::events::BytesStart::new("STR_PI")))?;
-                        writer.write_event(::quick_xml::events::Event::Start(
-                                ::quick_xml::events::BytesStart::new("myStr")))?;
-                        writer.write_event(::quick_xml::events::Event::Text(
-                                ::quick_xml::events::BytesText::new(&self.#param_name_ident)))?;
-                        writer.write_event(::quick_xml::events::Event::End(
-                                ::quick_xml::events::BytesEnd::new("myStr")))?;
-                        writer.write_event(::quick_xml::events::Event::End(
-                                ::quick_xml::events::BytesEnd::new("STR_PI")))?;
-
-                        writer.write_event(::quick_xml::events::Event::End(
-                                ::quick_xml::events::BytesEnd::new("STR_PI")))?;
-
-                        writer.write_event(::quick_xml::events::Event::End(
-                                ::quick_xml::events::BytesEnd::new("MsParam_PI")))?;
-                    }
-                }
-            }
-        })
-        .collect::<Vec<_>>();
+    let serialize_impl = serialize::expand_serialize(&input, &input_struct_name);
 
     let out = quote! {
-        #[derive(Debug)]
-        pub struct #input_struct_name {
-            #(#input_struct_params)*
-            pub addr: ::std::net::SocketAddr,
-            pub rods_zone: String,
-            pub instance: Option<String>,
-        }
-
-
-        impl packe::bosd::Serialiazable for #input_struct_name { }
-        impl packe::bosd::xml::XMLSerializable for #input_struct_name {
-            fn to_xml(&self, sink: &mut Vec<u8>)
-                -> std::result::Result<usize, rods_prot_msg::error::errors::IrodsError>
-            {
-                use packe::{tag, tag_fmt};
-                use ::std::io::Write;
-
-                let mut cursor = ::std::io::Cursor::new(sink);
-                let mut writer = ::quick_xml::Writer::new(&mut cursor);
-
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("ExecMyRuleInp_PI")))?;
-
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("myRule")))?;
-                writer.write_event(::quick_xml::events::Event::Text(
-                        ::quick_xml::events::BytesText::new(#rule_body)))?;
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("myRule")))?;
-
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("RHostAddr_PI")))?;
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("hostAddr")))?;
-                ::std::write!(writer.get_mut(), "{}", self.addr.ip())?;
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("hostAddr")))?;
-
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("rodsZone")))?;
-                writer.write_event(::quick_xml::events::Event::Text(
-                        ::quick_xml::events::BytesText::new(self.rods_zone.as_str())))?;
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("rodsZone")))?;
-
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("port")))?;
-                ::std::write!(writer.get_mut(), "{}", self.addr.port())?;
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("port")))?;
-
-
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("dummyInt")))?;
-                writer.write_event(::quick_xml::events::Event::Text(
-                        ::quick_xml::events::BytesText::new("0")))?;
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("dummyInt")))?;
-
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("RHostAddr_PI")))?;
-
-                if let Some(inst) = &self.instance {
-                    writer.write_event(::quick_xml::events::Event::Start(
-                            ::quick_xml::events::BytesStart::new("KeyValPair_PI")))?;
-
-                    writer.write_event(::quick_xml::events::Event::Start(
-                            ::quick_xml::events::BytesStart::new("ssLen")))?;
-                    writer.write_event(::quick_xml::events::Event::Text(
-                            ::quick_xml::events::BytesText::new("1")))?;
-                    writer.write_event(::quick_xml::events::Event::End(
-                            ::quick_xml::events::BytesEnd::new("ssLen")))?;
-
-                    writer.write_event(::quick_xml::events::Event::Start(
-                            ::quick_xml::events::BytesStart::new("keyWord")))?;
-                    writer.write_event(::quick_xml::events::Event::Text(
-                            ::quick_xml::events::BytesText::new("instance_name")))?;
-                    writer.write_event(::quick_xml::events::Event::End(
-                            ::quick_xml::events::BytesEnd::new("keyWord")))?;
-
-                    writer.write_event(::quick_xml::events::Event::Start(
-                            ::quick_xml::events::BytesStart::new("svalue")))?;
-                    writer.write_event(::quick_xml::events::Event::Text(
-                            ::quick_xml::events::BytesText::new(inst.as_str())))?;
-                    writer.write_event(::quick_xml::events::Event::End(
-                            ::quick_xml::events::BytesEnd::new("svalue")))?;
-
-                    writer.write_event(::quick_xml::events::Event::End(
-                            ::quick_xml::events::BytesEnd::new("KeyValPair_PI")))?;
-                } else {
-                    writer.write_event(::quick_xml::events::Event::Start(
-                            ::quick_xml::events::BytesStart::new("KeyValPair_PI")))?;
-                    writer.write_event(::quick_xml::events::Event::Start(
-                            ::quick_xml::events::BytesStart::new("ssLen")))?;
-                    writer.write_event(::quick_xml::events::Event::Text(
-                            ::quick_xml::events::BytesText::new("0")))?;
-                    writer.write_event(::quick_xml::events::Event::End(
-                            ::quick_xml::events::BytesEnd::new("ssLen")))?;
-                    writer.write_event(::quick_xml::events::Event::End(
-                            ::quick_xml::events::BytesEnd::new("KeyValPair_PI")))?;
-                }
-
-
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("outParamDesc")))?;
-                writer.write_event(::quick_xml::events::Event::Text(
-                        ::quick_xml::events::BytesText::new(#output_struct_name_lit_str)))?;
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("outParamDesc")))?;
-
-
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("MsParamArray_PI")))?;
-
-
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("paramLen")))?;
-                writer.write_event(::quick_xml::events::Event::Text(
-                        ::quick_xml::events::BytesText::new(#ms_param_array_len)))?;
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("paramLen")))?;
-
-                writer.write_event(::quick_xml::events::Event::Start(
-                        ::quick_xml::events::BytesStart::new("oprType")))?;
-                writer.write_event(::quick_xml::events::Event::Text(
-                        ::quick_xml::events::BytesText::new("0")))?;
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("oprType")))?;
-
-
-                #(#param_write_commands)*
-
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("MsParamArray_PI")))?;
-
-
-                writer.write_event(::quick_xml::events::Event::End(
-                        ::quick_xml::events::BytesEnd::new("ExecMyRuleInp_PI")))?;
-
-
-                Ok(cursor.position() as usize)
-            }
-        }
+        #input_struct
+        #serialize_impl
     };
 
     TokenStream::from(out)
