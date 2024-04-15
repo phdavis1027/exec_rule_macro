@@ -1,4 +1,5 @@
 use proc_macro::Punct;
+use quote::ToTokens;
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -45,7 +46,10 @@ impl Parse for RuleInput {
                 }
                 Arg::Params { value } => {
                     if let Some(_) = params {
-                        return Err(syn::Error::new_spanned(value, "Duplicate params argument"));
+                        return Err(syn::Error::new_spanned(
+                            "params",
+                            "Duplicate params argument",
+                        ));
                     }
                     params = Some(value);
                 }
