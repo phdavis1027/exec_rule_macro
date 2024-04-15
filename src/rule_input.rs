@@ -26,19 +26,27 @@ impl Parse for RuleInput {
         for arg in args {
             match arg {
                 Arg::Name { value } => {
-                    println!("Parsed name: {}", &value.value());
+                    if let Some(_) = name {
+                        return Err(syn::Error::new_spanned(value, "Duplicate name argument"));
+                    }
                     name = Some(value);
                 }
                 Arg::Output { value } => {
-                    println!("Parsed output");
+                    if let Some(_) = output {
+                        return Err(syn::Error::new_spanned(value, "Duplicate output argument"));
+                    }
                     output = Some(value);
                 }
                 Arg::Body { value } => {
-                    println!("Parsed body");
+                    if let Some(_) = body {
+                        return Err(syn::Error::new_spanned(value, "Duplicate body argument"));
+                    }
                     body = Some(value);
                 }
                 Arg::Params { value } => {
-                    println!("Parsed params");
+                    if let Some(_) = params {
+                        return Err(syn::Error::new_spanned(value, "Duplicate params argument"));
+                    }
                     params = Some(value);
                 }
             }
