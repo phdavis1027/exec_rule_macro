@@ -89,13 +89,13 @@ fn expand_write_commands(input: &RuleInput) -> Vec<TokenStream> {
         write_rule_body(name, body),
         write_rhost_addr(),
         write_kvp(),
-        write_tag("outParamDesc", output),
+        write_tag("outParamDesc", output.as_str()),
         write_param_array(&params),
         write_end("ExecMyRuleInp_PI"),
     ]
 }
 
-fn write_rule_body(name: &LitStr, body: &LitStr) -> TokenStream {
+fn write_rule_body(name: &Ident, body: &LitStr) -> TokenStream {
     let body = format!(
         "\
     @external
@@ -103,7 +103,7 @@ fn write_rule_body(name: &LitStr, body: &LitStr) -> TokenStream {
         {}
     }}
    ",
-        name.value(),
+        name.clone().to_string().as_str(),
         body.value()
     );
 

@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Ident;
 
-use crate::{rule_input::RuleInput, rule_param_type::RuleParamType};
+use crate::{rule_input::RuleInput, rule_param::RuleParam, rule_param_type::RuleParamType};
 
 pub(crate) fn expand_input_struct(name: &Ident, params: &Vec<TokenStream>) -> TokenStream {
     quote! {
@@ -20,9 +20,8 @@ pub(crate) fn expand_fields(input: &RuleInput) -> Vec<TokenStream> {
     input
         .params
         .iter()
-        .map(|param| {
-            let name = Ident::new(&param.label.value(), param.label.span());
-            let ptype = match &param.param_type {
+        .map(|RuleParam { label, param_type }| {
+            let ty = match &param_type {
                 RuleParamType::String => quote! { String },
                 RuleParamType::Byte => quote! { u8 },
                 RuleParamType::Int32 => quote! { i32 },
@@ -31,7 +30,7 @@ pub(crate) fn expand_fields(input: &RuleInput) -> Vec<TokenStream> {
             };
 
             quote! {
-                pub #name: #ptype,
+                pub #label: #ty,
             }
         })
         .collect()

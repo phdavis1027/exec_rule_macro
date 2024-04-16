@@ -1,13 +1,13 @@
-use syn::{parse::Parse, punctuated::Punctuated, LitStr, Token};
+use syn::{parse::Parse, punctuated::Punctuated, Ident, LitStr, Token, Type};
 
-use crate::{kw, rule_param::RuleParam};
+use crate::{exec_rule_out_types::OutputType, kw, rule_param::RuleParam};
 
 pub(crate) enum Arg {
     Name {
-        value: LitStr,
+        value: Ident,
     },
     Output {
-        value: LitStr,
+        value: OutputType,
     },
     Body {
         value: LitStr,
@@ -24,12 +24,12 @@ impl Parse for Arg {
         if lookahead.peek(kw::name) {
             input.parse::<kw::name>()?;
             input.parse::<Token![:]>()?;
-            let value = input.parse::<LitStr>()?;
+            let value = input.parse::<Ident>()?;
             Ok(Arg::Name { value })
         } else if lookahead.peek(kw::output) {
             input.parse::<kw::output>()?;
             input.parse::<Token![:]>()?;
-            let value = input.parse::<LitStr>()?;
+            let value = input.parse::<OutputType>()?;
             Ok(Arg::Output { value })
         } else if lookahead.peek(kw::body) {
             input.parse::<kw::body>()?;

@@ -13,15 +13,13 @@ use syn::{
 };
 
 pub(crate) struct RuleParam {
-    pub label: LitStr,
+    pub label: Ident,
     pub param_type: RuleParamType,
 }
 
-fn write_string_value(label: &LitStr) -> TokenStream {
+fn write_string_value(field: &Ident) -> TokenStream {
     let start = write_start("STR_PI");
     let end = write_end("STR_PI");
-
-    let field = Ident::new(label.value().as_str(), label.span());
 
     let value = write_tag(
         "myStr",
@@ -39,15 +37,13 @@ fn write_string_value(label: &LitStr) -> TokenStream {
     }
 }
 
-fn write_byte_value(label: &LitStr) -> TokenStream {
+fn write_byte_value(field: &Ident) -> TokenStream {
     let start = write_start("CHAR_PI");
     let end = write_end("CHAR_PI");
 
-    let field = Ident::new(label.value().as_str(), label.span());
-
     let value = write_tag_fmt(
         "myChar",
-        LitStr::new("{}", label.span()),
+        LitStr::new("{}", field.span()),
         quote! {
             self.#field
         },
@@ -62,15 +58,13 @@ fn write_byte_value(label: &LitStr) -> TokenStream {
     }
 }
 
-fn write_int16_value(label: &LitStr) -> TokenStream {
+fn write_int16_value(field: &Ident) -> TokenStream {
     let start = write_start("INT16_PI");
     let end = write_end("INT16_PI");
 
-    let field = Ident::new(label.value().as_str(), label.span());
-
     let value = write_tag_fmt(
         "myInt",
-        LitStr::new("{}", label.span()),
+        LitStr::new("{}", field.span()),
         quote! {
             self.#field
         },
@@ -85,15 +79,13 @@ fn write_int16_value(label: &LitStr) -> TokenStream {
     }
 }
 
-fn write_int32_value(label: &LitStr) -> TokenStream {
+fn write_int32_value(field: &Ident) -> TokenStream {
     let start = write_start("INT_PI");
     let end = write_end("INT_PI");
 
-    let field = Ident::new(label.value().as_str(), label.span());
-
     let value = write_tag_fmt(
         "myInt",
-        LitStr::new("{}", label.span()),
+        LitStr::new("{}", field.span()),
         quote! {
             self.#field
         },
@@ -108,15 +100,13 @@ fn write_int32_value(label: &LitStr) -> TokenStream {
     }
 }
 
-fn write_double_value(label: &LitStr) -> TokenStream {
+fn write_double_value(field: &Ident) -> TokenStream {
     let start = write_start("DOUBLE_PI");
     let end = write_end("DOUBLE_PI");
 
-    let field = Ident::new(label.value().as_str(), label.span());
-
     let value = write_tag_fmt(
         "myDouble",
-        LitStr::new("{}", label.span()),
+        LitStr::new("{}", field.span()),
         quote! {
             self.#field
         },
@@ -139,7 +129,7 @@ impl RuleParam {
         let label = write_tag(
             "label",
             LitStr::new(
-                format!("*{}", param.label.value()).as_str(),
+                format!("*{}", param.label.clone().to_string().as_str()).as_str(),
                 param.label.span(),
             ),
         );
@@ -153,6 +143,11 @@ impl RuleParam {
                 write_tag("type", LitStr::new("DOUBLE_PI", param.label.span()))
             }
         };
+
+        let label = LitStr::new(
+            format!("{}", param.label.clone().to_string().as_str()).as_str(),
+            param.label.span(),
+        );
 
         let value = match param.param_type {
             RuleParamType::String => write_string_value(&param.label),

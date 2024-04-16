@@ -1,12 +1,12 @@
 use syn::{
     parse::{Parse, ParseStream},
-    LitStr, Token,
+    Ident, LitStr, Token,
 };
 
 use crate::{kw, rule_param_type::RuleParamType};
 
 pub(crate) enum RuleParamField {
-    Label { value: LitStr },
+    Label { value: Ident },
     ParamType { value: RuleParamType },
 }
 
@@ -16,7 +16,7 @@ impl Parse for RuleParamField {
         if lookahead.peek(kw::label) {
             input.parse::<kw::label>()?;
             input.parse::<Token![:]>()?;
-            let value = input.parse::<LitStr>()?;
+            let value = input.parse::<Ident>()?;
             Ok(RuleParamField::Label { value })
         } else if lookahead.peek(kw::param_type) {
             input.parse::<kw::param_type>()?;

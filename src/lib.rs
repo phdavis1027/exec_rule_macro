@@ -15,6 +15,8 @@ use syn::{
 use crate::rule_param_type::RuleParamType;
 
 pub(crate) mod arg;
+pub(crate) mod exec_rule_impl;
+pub(crate) mod exec_rule_out_types;
 pub(crate) mod input_struct;
 pub(crate) mod rule_input;
 pub(crate) mod rule_param;
@@ -36,6 +38,9 @@ pub(crate) mod kw {
     syn::custom_keyword!(int16);
     syn::custom_keyword!(int32);
     syn::custom_keyword!(double);
+
+    // iRODS Rule output types
+    syn::custom_keyword!(exec_rule_out);
 }
 
 #[proc_macro]
@@ -43,7 +48,7 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(tokens as RuleInput);
 
     let input_struct_name = Ident::new(
-        &format!("{}__Rule__Input", input.name.value()),
+        &format!("{}__Rule__Input", input.name.clone().to_string().as_str()),
         input.name.span(),
     );
 
@@ -51,11 +56,14 @@ pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let input_struct = input_struct::expand_input_struct(&input_struct_name, &fields);
 
+    let impl_block = exec_rule_impl::expand_implementation(&input_struct_name, &input);
+
     let serialize_impl = serialize::expand_serialize(&input, &input_struct_name);
 
     let out = quote! {
         #input_struct
-        #serialize_impl
+        #impl_block
+        // #serialize_impl
     };
 
     TokenStream::from(out)

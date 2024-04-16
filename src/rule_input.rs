@@ -1,16 +1,14 @@
-use proc_macro::Punct;
-use quote::ToTokens;
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    LitStr, Token,
+    Ident, LitStr, Token, Type,
 };
 
-use crate::{arg::Arg, rule_param::RuleParam};
+use crate::{arg::Arg, exec_rule_out_types::OutputType, rule_param::RuleParam};
 
 pub(crate) struct RuleInput {
-    pub name: LitStr,
-    pub output: LitStr,
+    pub name: Ident,
+    pub output: OutputType,
     pub body: LitStr,
     pub params: Punctuated<RuleParam, Token![,]>,
 }
@@ -34,7 +32,10 @@ impl Parse for RuleInput {
                 }
                 Arg::Output { value } => {
                     if let Some(_) = output {
-                        return Err(syn::Error::new_spanned(value, "Duplicate output argument"));
+                        return Err(syn::Error::new_spanned(
+                            "output",
+                            "Duplicate output argument",
+                        ));
                     }
                     output = Some(value);
                 }
