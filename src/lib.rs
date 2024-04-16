@@ -1,70 +1,105 @@
-use std::fmt::format;
-
-use proc_macro::TokenStream;
-
-use quote::quote;
-use rule_input::RuleInput;
+use darling::FromDeriveInput;
+use proc_macro::{Ident, TokenStream};
 use syn::{
-    parse::{Parse, ParseStream},
-    parse_macro_input,
-    punctuated::Punctuated,
-    token::{Brace, Bracket},
-    Ident, LitStr, Token,
+    parse::Parse, parse_macro_input, punctuated::Punctuated, token::Token, Attribute, DataStruct,
+    ItemImpl, ItemStruct, LitStr, Result, Token,
 };
 
-use crate::rule_param_type::RuleParamType;
-
-pub(crate) mod arg;
-pub(crate) mod exec_rule_impl;
-pub(crate) mod exec_rule_out_types;
-pub(crate) mod input_struct;
-pub(crate) mod rule_input;
-pub(crate) mod rule_param;
-pub(crate) mod rule_param_field;
-pub(crate) mod rule_param_type;
-pub(crate) mod serialize;
-
-pub(crate) mod kw {
-    syn::custom_keyword!(name);
-    syn::custom_keyword!(param_type);
+mod kw {
     syn::custom_keyword!(body);
     syn::custom_keyword!(output);
-    syn::custom_keyword!(params);
-    syn::custom_keyword!(label);
-
-    // iRODS rule types
-    syn::custom_keyword!(string);
-    syn::custom_keyword!(byte); // char is a keyword
-    syn::custom_keyword!(int16);
-    syn::custom_keyword!(int32);
-    syn::custom_keyword!(double);
-
-    // iRODS Rule output types
-    syn::custom_keyword!(exec_rule_out);
 }
 
-#[proc_macro]
-pub fn rule(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(tokens as RuleInput);
+enum Arg {
+    Body(LitStr),
+    Name(LitStr),
+}
 
-    let input_struct_name = Ident::new(
-        &format!("{}__Rule__Input", input.name.clone().to_string().as_str()),
-        input.name.span(),
-    );
+impl Parse for Arg {
+    fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+        let lookahead = input.lookahead1();
 
-    let fields = input_struct::expand_fields(&input);
+        if lookahead.peek(kw::body) {
+            input.parse::<kw::body>()?;
+            input.parse::<Token![=]>()?;
+            let lit = input.parse::<LitStr>()?;
+            Ok(Arg::Body(lit))
+        } else if lookahead.peek(kw::output) {
+            input.parse::<kw::output>()?;
+            input.parse::<Token![=]>()?;
+            let lit = input.parse::<LitStr>()?;
+            Ok(Arg::Name(lit))
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
 
-    let input_struct = input_struct::expand_input_struct(&input_struct_name, &fields);
+struct Args {
+    body: LitStr,
+    output: LitStr,
+}
 
-    let impl_block = exec_rule_impl::expand_implementation(&input_struct_name, &input);
+const ARGS_PUNCTUATED_PARSE_ERR: &str = r#"invalid rule definition, expected 'body = <string literal>, output = <string literal>'. 
+Body literal must be valid rule language. Output literal must name a type that implement `packe::bosd::Deserializable`"#;
 
-    let serialize_impl = serialize::expand_serialize(&input, &input_struct_name);
+impl Parse for Args {
+    fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+        let args = Punctuated::<Arg, Token![,]>::parse_terminated(input).map_err(|mut err| {
+            err.combine(syn::Error::new(err.span(), ARGS_PUNCTUATED_PARSE_ERR));
 
-    let out = quote! {
-        #input_struct
-        #impl_block
-        // #serialize_impl
+            err
+        })?;
+
+        let mut body = None;
+        let mut output = None;
+
+        for arg in args {
+            match arg {
+                Arg::Body(lit) => {
+                    if body.is_some() {
+                        return Err(syn::Error::new(lit.span(), "duplicate 'body' argument"));
+                    }
+                    body = Some(lit);
+                }
+                Arg::Name(lit) => {
+                    if output.is_some() {
+                        return Err(syn::Error::new(lit.span(), "duplicate 'output' argument"));
+                    }
+                    output = Some(lit);
+                }
+            }
+        }
+
+        Ok(Args {
+            body: body.ok_or_else(|| syn::Error::new(input.span(), "expected 'body = <string literal>', which must be valid rule language"))?,
+            output: output
+                .ok_or_else(|| syn::Error::new(input.span(), r#"expected 'output = <string literal>', which must name a type that implements packe::bosd::Deserializable"#))?,
+        })
+    }
+}
+
+fn input_and_compile_error(mut item: TokenStream, err: syn::Error) -> TokenStream {
+    let compile_err = TokenStream::from(err.to_compile_error());
+    item.extend(compile_err);
+    item
+}
+
+struct Rule {
+    serializable_struct: ItemStruct,
+    serialization_impl: ItemImpl,
+    rule_execution_impl: ItemImpl,
+}
+
+#[proc_macro_attribute]
+pub fn rule(args: TokenStream, input: TokenStream) -> TokenStream {
+    let args = match syn::parse::<Args>(args) {
+        Ok(args) => TokenStream::new(),
+        Err(e) => return input_and_compile_error(input, e),
     };
 
-    TokenStream::from(out)
+    let input = match syn::parse::<ItemStruct>(input.clone()) {
+        Ok(input) => input,
+        Err(e) => return input_and_compile_error(input, e),
+    };
 }
