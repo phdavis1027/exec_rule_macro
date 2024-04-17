@@ -1,8 +1,10 @@
-use darling::FromDeriveInput;
-use proc_macro::{Ident, TokenStream};
+use itertools::Itertools;
+use proc_macro::TokenStream;
+use quote::ToTokens;
+use regex::Regex;
 use syn::{
-    parse::Parse, parse_macro_input, punctuated::Punctuated, token::Token, Attribute, DataStruct,
-    ItemImpl, ItemStruct, LitStr, Result, Token,
+    parse::Parse, punctuated::Punctuated, spanned::Spanned, Fields, FieldsNamed, ItemStruct,
+    LitStr, Result, Token, TypePath,
 };
 
 mod kw {
@@ -79,22 +81,78 @@ impl Parse for Args {
     }
 }
 
-fn input_and_compile_error(mut item: TokenStream, err: syn::Error) -> TokenStream {
-    let compile_err = TokenStream::from(err.to_compile_error());
-    item.extend(compile_err);
-    item
+struct Rule {
+    // The struct being taught how to execute rules
+    receiver: ItemStruct,
+
+    // The output struct that will be deserialized
+    // from the server's response
+    output: TypePath,
+
+    // The rule language that will be executed
+    body: LitStr,
 }
 
-struct Rule {
-    serializable_struct: ItemStruct,
-    serialization_impl: ItemImpl,
-    rule_execution_impl: ItemImpl,
+impl ToTokens for Rule {
+    fn to_tokens(&self, out: &mut proc_macro2::TokenStream) {
+        out.extend(self.receiver.clone().into_token_stream());
+    }
+}
+
+fn assert_fields_match_rule_params(fields: &FieldsNamed, args: &Args) -> syn::Result<()> {
+    let star_var = Regex::new(r#"\*([a-zA-Z][a-zA-Z0-9])"#).unwrap();
+
+    for (var, field) in star_var
+        .captures_iter(&args.body.value())
+        .map(|capture| capture.get(0).unwrap().as_str()) // UNWRAP: There's only one capture group
+        .sorted()
+        .dedup()
+        .zip(fields.named.iter())
+    {
+        match (var, field) {
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(syn::Error::new(
+                    field.span(),
+                    "expected same number of fields as named variables in rule body",
+                ))
+            (Some(v), Some(f)) => {
+
+            }
+            (None, None) => return Ok(())
+            }
+        }
+    }
+}
+
+impl Rule {
+    fn try_new(args: Args, input: ItemStruct) -> syn::Result<Self> {
+        let fields = match &input.fields {
+            Fields::Named(fields) => fields,
+            Fields::Unnamed(_) | Fields::Unit => {
+                return Err(syn::Error::new(
+                    input.fields.span(),
+                    "expected a struct with named fields",
+                ))
+            }
+        };
+
+        assert_fields_match_rule_params(&fields, &args)?;
+
+        Ok(Rule {
+            receiver: input,
+            output: TypePath {
+                qself: None,
+                path: args.output.parse()?,
+            },
+            body: args.body,
+        })
+    }
 }
 
 #[proc_macro_attribute]
 pub fn rule(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = match syn::parse::<Args>(args) {
-        Ok(args) => TokenStream::new(),
+        Ok(args) => args,
         Err(e) => return input_and_compile_error(input, e),
     };
 
@@ -102,4 +160,15 @@ pub fn rule(args: TokenStream, input: TokenStream) -> TokenStream {
         Ok(input) => input,
         Err(e) => return input_and_compile_error(input, e),
     };
+
+    match Rule::try_new(args, input.clone()) {
+        Ok(rule) => rule.into_token_stream().into(),
+        Err(e) => input_and_compile_error(input.into_token_stream().into(), e),
+    }
+}
+
+fn input_and_compile_error(mut item: TokenStream, err: syn::Error) -> TokenStream {
+    let compile_err = TokenStream::from(err.to_compile_error());
+    item.extend(compile_err);
+    item
 }
