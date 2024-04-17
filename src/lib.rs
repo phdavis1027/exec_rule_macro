@@ -1,11 +1,17 @@
 use itertools::Itertools;
 use proc_macro::TokenStream;
-use quote::ToTokens;
+use proc_macro2::Span;
+use quote::{quote, ToTokens};
 use regex::Regex;
 use syn::{
-    parse::Parse, punctuated::Punctuated, spanned::Spanned, Fields, FieldsNamed, ItemStruct,
-    LitStr, Result, Token, TypePath,
+    parse::{self, Parse},
+    punctuated::Punctuated,
+    spanned::Spanned,
+    token::Comma,
+    Field, Fields, FieldsNamed, Ident, ItemStruct, LitStr, Result, Token, TypePath,
 };
+
+mod serialize;
 
 mod kw {
     syn::custom_keyword!(body);
@@ -43,7 +49,7 @@ struct Args {
 }
 
 const ARGS_PUNCTUATED_PARSE_ERR: &str = r#"invalid rule definition, expected 'body = <string literal>, output = <string literal>'. 
-Body literal must be valid rule language. Output literal must name a type that implement `packe::bosd::Deserializable`"#;
+Body literal must be valid rule language. Output literal must name a type exported from packe::exec_rule"#;
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> Result<Self> {
@@ -76,7 +82,7 @@ impl Parse for Args {
         Ok(Args {
             body: body.ok_or_else(|| syn::Error::new(input.span(), "expected 'body = <string literal>', which must be valid rule language"))?,
             output: output
-                .ok_or_else(|| syn::Error::new(input.span(), r#"expected 'output = <string literal>', which must name a type that implements packe::bosd::Deserializable"#))?,
+                .ok_or_else(|| syn::Error::new(input.span(), r#"expected 'output = <string literal>', which must name a type exported from packe::exec_rule"#))?,
         })
     }
 }
@@ -96,38 +102,14 @@ struct Rule {
 impl ToTokens for Rule {
     fn to_tokens(&self, out: &mut proc_macro2::TokenStream) {
         out.extend(self.receiver.clone().into_token_stream());
-    }
-}
-
-fn assert_fields_match_rule_params(fields: &FieldsNamed, args: &Args) -> syn::Result<()> {
-    let star_var = Regex::new(r#"\*([a-zA-Z][a-zA-Z0-9])"#).unwrap();
-
-    for (var, field) in star_var
-        .captures_iter(&args.body.value())
-        .map(|capture| capture.get(0).unwrap().as_str()) // UNWRAP: There's only one capture group
-        .sorted()
-        .dedup()
-        .zip(fields.named.iter())
-    {
-        match (var, field) {
-            (Some(_), None) | (None, Some(_)) => {
-                return Err(syn::Error::new(
-                    field.span(),
-                    "expected same number of fields as named variables in rule body",
-                ))
-            (Some(v), Some(f)) => {
-
-            }
-            (None, None) => return Ok(())
-            }
-        }
+        out.extend(serialize::expand_serialization_impl(self).into_token_stream());
     }
 }
 
 impl Rule {
     fn try_new(args: Args, input: ItemStruct) -> syn::Result<Self> {
         let fields = match &input.fields {
-            Fields::Named(fields) => fields,
+            Fields::Named(fields) => &fields.named,
             Fields::Unnamed(_) | Fields::Unit => {
                 return Err(syn::Error::new(
                     input.fields.span(),
@@ -136,14 +118,12 @@ impl Rule {
             }
         };
 
-        assert_fields_match_rule_params(&fields, &args)?;
+        let output = Ident::new(args.output.value().as_str(), args.output.span());
+        let output: TypePath = syn::parse(quote! { ::packe::exec_rule::#output }.into()).unwrap();
 
         Ok(Rule {
             receiver: input,
-            output: TypePath {
-                qself: None,
-                path: args.output.parse()?,
-            },
+            output,
             body: args.body,
         })
     }
