@@ -1,63 +1,16 @@
 use proc_macro2::Span;
 use quote::quote;
-use syn::{spanned::Spanned, Field, Fields, ItemStruct, LitStr};
+use syn::{spanned::Spanned, Field, Fields, Ident, ItemStruct, Lit, LitStr, Type};
 
-use crate::Rule;
+use crate::write_utils::*;
 
-pub(crate) fn write_tag<P, Q>(name: P, text: Q) -> proc_macro2::TokenStream
-where
-    P: quote::ToTokens,
-    Q: quote::ToTokens,
-{
-    quote! {
-        writer.write_event(::quick_xml::events::Event::Start(
-                ::quick_xml::events::BytesStart::new(#name)))?;
-        writer.write_event(::quick_xml::events::Event::Text(
-                ::quick_xml::events::BytesText::new(#text)))?;
-        writer.write_event(::quick_xml::events::Event::End(
-                ::quick_xml::events::BytesEnd::new(#name)))?;
-    }
-}
+use crate::rule::Rule;
 
-pub(crate) fn write_tag_fmt<P, Q>(name: P, fmt: LitStr, text: Q) -> proc_macro2::TokenStream
-where
-    P: quote::ToTokens,
-    Q: quote::ToTokens,
-{
-    quote! {
-        writer.write_event(::quick_xml::events::Event::Start(
-                ::quick_xml::events::BytesStart::new(#name)))?;
-        ::std::write!(writer.get_mut(), #fmt, #text)?;
-        writer.write_event(::quick_xml::events::Event::End(
-                ::quick_xml::events::BytesEnd::new(#name)))?;
-    }
-}
-
-pub(crate) fn write_start<P>(name: P) -> proc_macro2::TokenStream
-where
-    P: quote::ToTokens,
-{
-    quote! {
-        writer.write_event(::quick_xml::events::Event::Start(
-                ::quick_xml::events::BytesStart::new(#name)))?;
-    }
-}
-
-pub(crate) fn write_end<P>(name: P) -> proc_macro2::TokenStream
-where
-    P: quote::ToTokens,
-{
-    quote! {
-        writer.write_event(::quick_xml::events::Event::End(
-                ::quick_xml::events::BytesEnd::new(#name)))?;
-    }
-}
-
-pub(crate) fn expand_serialization_impl(rule: &Rule) -> proc_macro2::TokenStream {
-    let write_commands = expand_write_commands(rule);
+pub(crate) fn expand_serialization_impl(rule: &Rule) -> syn::Result<proc_macro2::TokenStream> {
+    let write_commands = expand_write_commands(rule)?;
     let struct_name = &rule.receiver.ident;
 
-    quote! {
+    Ok(quote! {
         impl ::packe::bosd::Serialiazable for #struct_name { }
         impl ::packe::bosd::xml::XMLSerializable for #struct_name {
             fn to_xml(&self, sink: &mut Vec<u8>)
@@ -74,52 +27,51 @@ pub(crate) fn expand_serialization_impl(rule: &Rule) -> proc_macro2::TokenStream
                 Ok(cursor.position() as usize)
             }
         }
-    }
+    })
 }
 
-fn expand_write_commands(rule: &Rule) -> Vec<proc_macro2::TokenStream> {
-    vec![
+fn expand_write_commands(rule: &Rule) -> syn::Result<Vec<proc_macro2::TokenStream>> {
+    Ok(vec![
         write_start("ExecMyRuleInp_PI"),
-        write_rule_body(&rule.receiver, &rule.body),
+        write_rule_body(rule),
         write_rhost_addr(),
         write_kvp(),
-        write_tag(
-            "outParamDesc",
-            rule.output
-                .path
-                .segments
-                .iter()
-                .last()
-                .unwrap()
-                .ident
-                .to_string()
-                .as_str(),
-        ),
-        write_param_array(rule),
+        write_tag("outParamDesc", &rule.output),
+        write_param_array(rule)?,
         write_end("ExecMyRuleInp_PI"),
-    ]
+    ])
 }
 
-fn write_param_array(rule: &Rule) -> proc_macro2::TokenStream {
+fn write_param_array(rule: &Rule) -> syn::Result<proc_macro2::TokenStream> {
     let start = write_start("MsParamArray_PI");
     let end = write_end("MsParamArray_PI");
 
+    let mut params = Vec::new();
+    for field in &rule.receiver.fields {
+        params.push(field_to_irods_param(field)?);
+    }
+
+    let params_len = write_tag_fmt("paramLen", LitStr::new("{}", rule.span()), params.len());
+
     let opr_type = write_tag("oprType", "0");
 
-    quote! {
-            #start
+    Ok(quote! {
+        #start
 
-    //        #fields_len
-            #opr_type
+        #params_len
+        #opr_type
 
-    //       #( #fields )*
+        #( #params )*
 
-            #end
-        }
-    .into()
+        #end
+    }
+    .into())
 }
 
-fn write_rule_body(input: &ItemStruct, body: &LitStr) -> proc_macro2::TokenStream {
+fn write_rule_body(rule: &Rule) -> proc_macro2::TokenStream {
+    let receiver = rule.receiver.ident.to_string();
+    let body = rule.body.value();
+
     let body = format!(
         "\
     @external
@@ -127,8 +79,7 @@ fn write_rule_body(input: &ItemStruct, body: &LitStr) -> proc_macro2::TokenStrea
         {}
     }}
    ",
-        input.ident.to_string(),
-        body.value()
+        receiver, body
     );
 
     write_tag("myRule", body.as_str())
