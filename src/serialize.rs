@@ -7,6 +7,7 @@ use crate::write_utils::*;
 use crate::rule::Rule;
 
 pub(crate) fn expand_serialization_impl(rule: &Rule) -> syn::Result<proc_macro2::TokenStream> {
+    println!("Got here");
     let write_commands = expand_write_commands(rule)?;
     let struct_name = &rule.receiver.ident;
 
@@ -50,6 +51,8 @@ fn write_param_array(rule: &Rule) -> syn::Result<proc_macro2::TokenStream> {
     for field in &rule.receiver.fields {
         params.push(field_to_irods_param(field)?);
     }
+
+    println!("Got here");
 
     let params_len = write_tag_fmt("paramLen", LitStr::new("{}", rule.span()), params.len());
 

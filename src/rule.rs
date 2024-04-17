@@ -22,8 +22,6 @@ pub(crate) struct Rule {
 impl ToTokens for Rule {
     fn to_tokens(&self, out: &mut proc_macro2::TokenStream) {
         let extended_receiver = self.add_extra_fields_to_receiver();
-        out.extend(extended_receiver.to_token_stream());
-
         match expand_serialization_impl(self) {
             Ok(serialization_impl) => {
                 out.extend(serialization_impl);
@@ -39,7 +37,6 @@ impl ToTokens for Rule {
 impl Rule {
     fn add_extra_fields_to_receiver(&self) -> ItemStruct {
         let mut receiver = self.receiver.clone();
-
         let FieldsNamed {
             brace_token,
             mut named,
@@ -54,7 +51,7 @@ impl Rule {
         };
 
         let instance_field: Field = syn::parse_quote! {
-            pub __IRODS_EXEC__RULE__instance__: Option<String>
+            pub __iRODS_EXEC__RULE__instance__: Option<String>
         };
 
         named.extend(vec![addr_field, instance_field]);
