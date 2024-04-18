@@ -1,13 +1,11 @@
 use proc_macro2::Span;
 use quote::quote;
-use syn::{spanned::Spanned, Field, Fields, Ident, ItemStruct, Lit, LitStr, Type};
-
-use crate::write_utils::*;
+use syn::{Ident, LitStr};
 
 use crate::rule::Rule;
+use crate::write_utils::*;
 
 pub(crate) fn expand_serialization_impl(rule: &Rule) -> syn::Result<proc_macro2::TokenStream> {
-    println!("Got here");
     let write_commands = expand_write_commands(rule)?;
     let struct_name = &rule.receiver.ident;
 
@@ -37,10 +35,17 @@ fn expand_write_commands(rule: &Rule) -> syn::Result<Vec<proc_macro2::TokenStrea
         write_rule_body(rule),
         write_rhost_addr(),
         write_kvp(),
-        write_tag("outParamDesc", &rule.output),
+        write_tag("outParamDesc", serialize_output_name(&rule.output)?),
         write_param_array(rule)?,
         write_end("ExecMyRuleInp_PI"),
     ])
+}
+
+fn serialize_output_name(output: &syn::Ident) -> syn::Result<&'static str> {
+    match output.to_string().as_str() {
+        "ExecRuleOut" => Ok("execRuleOut"),
+        _ => Err(syn::Error::new_spanned(output, "Unsupported output type")),
+    }
 }
 
 fn write_param_array(rule: &Rule) -> syn::Result<proc_macro2::TokenStream> {
@@ -52,9 +57,11 @@ fn write_param_array(rule: &Rule) -> syn::Result<proc_macro2::TokenStream> {
         params.push(field_to_irods_param(field)?);
     }
 
-    println!("Got here");
-
-    let params_len = write_tag_fmt("paramLen", LitStr::new("{}", rule.span()), params.len());
+    let params_len = write_tag_fmt(
+        "paramLen",
+        LitStr::new("{}", Span::call_site()),
+        params.len(),
+    );
 
     let opr_type = write_tag("oprType", "0");
 

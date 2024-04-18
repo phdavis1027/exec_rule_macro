@@ -1,8 +1,5 @@
-use quote::{quote_spanned, ToTokens};
-use syn::{
-    punctuated::Punctuated, spanned::Spanned, token::Comma, Field, Fields, FieldsNamed, Ident,
-    ItemStruct, LitStr, TypePath,
-};
+use quote::ToTokens;
+use syn::{spanned::Spanned, Field, Fields, FieldsNamed, Ident, ItemStruct, LitStr};
 
 use crate::{arg::Args, serialize::expand_serialization_impl};
 
@@ -13,7 +10,7 @@ pub(crate) struct Rule {
 
     // The output struct that will be deserialized
     // from the server's response
-    pub(crate) output: proc_macro2::TokenStream,
+    pub(crate) output: Ident,
 
     // The rule language that will be executed
     pub(crate) body: LitStr,
@@ -23,14 +20,15 @@ impl ToTokens for Rule {
     fn to_tokens(&self, out: &mut proc_macro2::TokenStream) {
         let extended_receiver = self.add_extra_fields_to_receiver();
         match expand_serialization_impl(self) {
-            Ok(serialization_impl) => {
-                out.extend(serialization_impl);
+            Ok(ts) => {
+                out.extend(ts);
             }
-            Err(err) => {
-                out.extend(err.to_compile_error());
+            Err(e) => {
+                out.extend(e.to_compile_error());
                 return;
             }
         }
+        out.extend(extended_receiver.to_token_stream());
     }
 }
 
@@ -51,7 +49,7 @@ impl Rule {
         };
 
         let instance_field: Field = syn::parse_quote! {
-            pub __iRODS_EXEC__RULE__instance__: Option<String>
+            pub __iRODS__EXEC__RULE__instance__: Option<String>
         };
 
         named.extend(vec![addr_field, instance_field]);
@@ -70,9 +68,6 @@ impl Rule {
         };
 
         let output = Ident::new(args.output.value().as_str(), args.output.span());
-        let output = quote_spanned! { output.span() =>
-            ::packe::exec_rule::#output
-        };
 
         Ok(Self {
             receiver,
