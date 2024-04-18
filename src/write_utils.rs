@@ -154,13 +154,7 @@ pub(crate) fn field_to_irods_param(field: &Field) -> syn::Result<proc_macro2::To
     let start = write_start("MsParam_PI");
     let end = write_end("MsParam_PI");
 
-    let label = write_tag(
-        "label",
-        LitStr::new(
-            format!("*{}", field.ident.as_ref().unwrap().to_string()).as_str(),
-            field.span(),
-        ),
-    );
+    let label = write_tag("label", field.ident.as_ref().unwrap().to_string().as_str());
 
     let ty = match &field.ty {
         Type::Path(ref ty) => ty.clone(),

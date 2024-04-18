@@ -57,11 +57,7 @@ fn write_param_array(rule: &Rule) -> syn::Result<proc_macro2::TokenStream> {
         params.push(field_to_irods_param(field)?);
     }
 
-    let params_len = write_tag_fmt(
-        "paramLen",
-        LitStr::new("{}", Span::call_site()),
-        params.len(),
-    );
+    let params_len = write_tag("paramLen", format!("{}", params.len()).as_str());
 
     let opr_type = write_tag("oprType", "0");
 
