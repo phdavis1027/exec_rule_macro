@@ -33,7 +33,7 @@ pub(crate) struct Args {
 }
 
 const ARGS_PUNCTUATED_PARSE_ERR: &str = r#"invalid rule definition, expected 'body = <string literal>, output = <string literal>'. 
-Body literal must be valid rule language. Output literal must name a type exported from packe::exec_rule"#;
+Body literal must be valid rule language. Output literal must name a type exported from irods_client::exec_rule"#;
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -66,7 +66,7 @@ impl Parse for Args {
         Ok(Args {
             body: body.ok_or_else(|| syn::Error::new(input.span(), "expected 'body = <string literal>', which must be valid rule language"))?,
             output: output
-                .ok_or_else(|| syn::Error::new(input.span(), r#"expected 'output = <string literal>', which must name a type exported from packe::exec_rule"#))?,
+                .ok_or_else(|| syn::Error::new(input.span(), r#"expected 'output = <string literal>', which must name a type exported from irods_client::exec_rule"#))?,
         })
     }
 }

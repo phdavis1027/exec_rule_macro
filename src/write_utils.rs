@@ -7,12 +7,12 @@ where
     Q: quote::ToTokens,
 {
     quote! {
-        writer.write_event(::quick_xml::events::Event::Start(
-                ::quick_xml::events::BytesStart::new(#name)))?;
-        writer.write_event(::quick_xml::events::Event::Text(
-                ::quick_xml::events::BytesText::new(#text)))?;
-        writer.write_event(::quick_xml::events::Event::End(
-                ::quick_xml::events::BytesEnd::new(#name)))?;
+        writer.write_event(::irods_client::reexports::quick_xml::events::Event::Start(
+                ::irods_client::reexports::quick_xml::events::BytesStart::new(#name)))?;
+        writer.write_event(::irods_client::reexports::quick_xml::events::Event::Text(
+                ::irods_client::reexports::quick_xml::events::BytesText::new(#text)))?;
+        writer.write_event(::irods_client::reexports::quick_xml::events::Event::End(
+                ::irods_client::reexports::quick_xml::events::BytesEnd::new(#name)))?;
     }
 }
 
@@ -22,11 +22,11 @@ where
     Q: quote::ToTokens,
 {
     quote! {
-        writer.write_event(::quick_xml::events::Event::Start(
-                ::quick_xml::events::BytesStart::new(#name)))?;
+        writer.write_event(::irods_client::reexports::quick_xml::events::Event::Start(
+                ::irods_client::reexports::quick_xml::events::BytesStart::new(#name)))?;
         ::std::write!(writer.get_mut(), #fmt, #text)?;
-        writer.write_event(::quick_xml::events::Event::End(
-                ::quick_xml::events::BytesEnd::new(#name)))?;
+        writer.write_event(::irods_client::reexports::quick_xml::events::Event::End(
+                ::irods_client::reexports::quick_xml::events::BytesEnd::new(#name)))?;
     }
 }
 
@@ -35,8 +35,8 @@ where
     P: quote::ToTokens,
 {
     quote! {
-        writer.write_event(::quick_xml::events::Event::Start(
-                ::quick_xml::events::BytesStart::new(#name)))?;
+        writer.write_event(::irods_client::reexports::quick_xml::events::Event::Start(
+                ::irods_client::reexports::quick_xml::events::BytesStart::new(#name)))?;
     }
 }
 
@@ -45,8 +45,8 @@ where
     P: quote::ToTokens,
 {
     quote! {
-        writer.write_event(::quick_xml::events::Event::End(
-                ::quick_xml::events::BytesEnd::new(#name)))?;
+        writer.write_event(::irods_client::reexports::quick_xml::events::Event::End(
+                ::irods_client::reexports::quick_xml::events::BytesEnd::new(#name)))?;
     }
 }
 

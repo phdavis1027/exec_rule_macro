@@ -10,16 +10,16 @@ pub(crate) fn expand_serialization_impl(rule: &Rule) -> syn::Result<proc_macro2:
     let struct_name = &rule.receiver.ident;
 
     Ok(quote! {
-        impl ::packe::bosd::Serialiazable for #struct_name { }
-        impl ::packe::bosd::xml::XMLSerializable for #struct_name {
+        impl ::irods_client::bosd::Serialiazable for #struct_name { }
+        impl ::irods_client::bosd::xml::XMLSerializable for #struct_name {
             fn to_xml(&self, sink: &mut Vec<u8>)
-                -> std::result::Result<usize, rods_prot_msg::error::errors::IrodsError>
+                -> ::std::result::Result<usize, ::irods_client::error::errors::IrodsError>
             {
-                use packe::{tag, tag_fmt};
+                use ::irods_client::{tag, tag_fmt};
                 use ::std::io::Write;
 
                 let mut cursor = ::std::io::Cursor::new(sink);
-                let mut writer = ::quick_xml::Writer::new(&mut cursor);
+                let mut writer = ::irods_client::reexports::quick_xml::Writer::new(&mut cursor);
 
                 #( #write_commands )*
 
@@ -98,14 +98,14 @@ fn write_rhost_addr() -> proc_macro2::TokenStream {
         "hostAddr",
         LitStr::new("{}", Span::call_site()),
         quote! {
-            self.addr.ip()
+            self.__iRODS__EXEC_RULE__addr__.ip()
         },
     );
 
     let rods_zone = write_tag(
         "rodsZone",
         quote! {
-            self.rods_zone.as_str()
+            self.__iRODS__EXEC_RULE__rods_zone__.as_str()
         },
     );
 
@@ -113,7 +113,7 @@ fn write_rhost_addr() -> proc_macro2::TokenStream {
         "port",
         LitStr::new("{}", Span::call_site()),
         quote! {
-            self.addr.port()
+            self.__iRODS__EXEC_RULE__addr__.port()
         },
     );
 

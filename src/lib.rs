@@ -1,13 +1,10 @@
-use itertools::Itertools;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::ToTokens;
 use syn::{
     parse::{self, Parse},
-    punctuated::Punctuated,
     spanned::Spanned,
-    token::{Comma, Token},
-    Field, Fields, FieldsNamed, Ident, ItemStruct, LitStr, Result, Token, TypePath,
+    ItemStruct, Result, Token, TypePath,
 };
 
 mod arg;
