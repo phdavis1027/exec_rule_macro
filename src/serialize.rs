@@ -10,7 +10,10 @@ pub(crate) fn expand_serialization_impl(rule: &Rule) -> syn::Result<proc_macro2:
     let struct_name = &rule.receiver.ident;
 
     Ok(quote! {
+        #[automatically_derived]
         impl ::irods_client::bosd::Serialiazable for #struct_name { }
+
+        #[automatically_derived]
         impl ::irods_client::bosd::xml::XMLSerializable for #struct_name {
             fn to_xml(&self, sink: &mut Vec<u8>)
                 -> ::std::result::Result<usize, ::irods_client::error::errors::IrodsError>
@@ -98,22 +101,34 @@ fn write_rhost_addr() -> proc_macro2::TokenStream {
         "hostAddr",
         LitStr::new("{}", Span::call_site()),
         quote! {
-            self.__iRODS__EXEC_RULE__addr__.ip()
+            self.__iRODS__EXEC__RULE__addr__.ip()
         },
     );
 
-    let rods_zone = write_tag(
+    let some = write_tag(
         "rodsZone",
         quote! {
-            self.__iRODS__EXEC_RULE__rods_zone__.as_str()
+            zone.as_str()
         },
     );
+    let none = write_tag("rodsZone", "");
+
+    let rods_zone = quote! {
+        match self.__iRODS__EXEC__RULE__rods_zone__ {
+            Some(ref zone) => {
+                #some
+            },
+            None => {
+                #none
+            }
+        }
+    };
 
     let port = write_tag_fmt(
         "port",
         LitStr::new("{}", Span::call_site()),
         quote! {
-            self.__iRODS__EXEC_RULE__addr__.port()
+            self.__iRODS__EXEC__RULE__addr__.port()
         },
     );
 
@@ -135,6 +150,7 @@ fn write_rhost_addr() -> proc_macro2::TokenStream {
 
 fn write_kvp() -> proc_macro2::TokenStream {
     let start = write_start("KeyValPair_PI");
+    let end = write_end("KeyValPair_PI");
 
     let ss_len_zero = write_tag("ssLen", "0");
     let ss_len_one = write_tag("ssLen", "1");
@@ -148,12 +164,10 @@ fn write_kvp() -> proc_macro2::TokenStream {
         },
     );
 
-    let end = write_end("KeyValPair_PI");
-
     quote! {
         #start
 
-        match &self.rule_engine_instance {
+        match &self.__iRODS__EXEC__RULE__rule_engine_instance__ {
             Some(instance) => {
                 #ss_len_one
                 #key_word

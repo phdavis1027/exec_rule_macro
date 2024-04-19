@@ -43,18 +43,19 @@ impl Rule {
         };
 
         quote! {
+            #[automatically_derived]
             impl ::irods_client::exec_rule::Rule for #receiver {
                 type Output = #output;
 
                 async fn execute<'c, T, C>(
-                    self,
+                    &self,
                     conn: &'c mut ::irods_client::connection::Connection<T, C>,
                 ) -> ::std::result::Result<
-                    Self::Output, ::rods_prot_msg::error::errors::IrodsError
+                    Self::Output, ::irods_client::error::errors::IrodsError
                 >
                 where
                     T: ::irods_client::bosd::ProtocolEncoding,
-                    C: ::irods_client::reexports::tokio::io::AsyncRead + ::irods_client::reexports::tokio::io::AsyncWrite
+                    C: ::irods_client::reexports::tokio::io::AsyncRead + ::irods_client::reexports::tokio::io::AsyncWrite,
                     C: ::std::marker::Unpin + ::std::marker::Send
                 {
 
@@ -64,7 +65,8 @@ impl Rule {
                         ::irods_client::common::APN::ExecMyRule as i32
                     ).await?;
 
-                    conn.get_header_and_msg::<T, #output>().await?
+                    let (_, out) = conn.get_header_and_msg::<#output>().await?;
+                    Ok(out)
                 }
             }
         }
@@ -82,14 +84,17 @@ impl Rule {
         };
 
         let addr_field: Field = syn::parse_quote! {
+            #[builder(setter(name = "addr"))]
             pub __iRODS__EXEC__RULE__addr__: ::std::net::SocketAddr
         };
 
         let instance_field: Field = syn::parse_quote! {
-            pub __iRODS__EXEC__RULE__instance__: ::std::option::Option<::std::string::String>
+            #[builder(setter(name = "instance"))]
+            pub __iRODS__EXEC__RULE__rule_engine_instance__: ::std::option::Option<::std::string::String>
         };
 
         let zone_field: Field = syn::parse_quote! {
+            #[builder(setter(name = "rods_zone"))]
             pub __iRODS__EXEC__RULE__rods_zone__: ::std::option::Option<::std::string::String>
         };
 
