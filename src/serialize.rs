@@ -97,13 +97,24 @@ fn write_rule_body(rule: &Rule) -> proc_macro2::TokenStream {
 fn write_rhost_addr() -> proc_macro2::TokenStream {
     let start = write_start("RHostAddr_PI");
 
-    let host_addr = write_tag_fmt(
+    let some_addr = write_tag_fmt(
         "hostAddr",
         LitStr::new("{}", Span::call_site()),
         quote! {
-            self.__iRODS__EXEC__RULE__addr__.ip()
+            addr.ip()
         },
     );
+    let no_addr = write_tag("hostAddr", "");
+    let addr = quote! {
+        match self.__iRODS__EXEC__RULE__addr__ {
+            Some(ref addr) => {
+                #some_addr
+            },
+            None => {
+                #no_addr
+            }
+        }
+    };
 
     let some = write_tag(
         "rodsZone",
@@ -112,7 +123,6 @@ fn write_rhost_addr() -> proc_macro2::TokenStream {
         },
     );
     let none = write_tag("rodsZone", "");
-
     let rods_zone = quote! {
         match self.__iRODS__EXEC__RULE__rods_zone__ {
             Some(ref zone) => {
@@ -124,13 +134,26 @@ fn write_rhost_addr() -> proc_macro2::TokenStream {
         }
     };
 
-    let port = write_tag_fmt(
+    let some_port = write_tag_fmt(
         "port",
         LitStr::new("{}", Span::call_site()),
         quote! {
-            self.__iRODS__EXEC__RULE__addr__.port()
+            port
         },
     );
+
+    let no_port = write_tag("port", "0");
+
+    let port = quote! {
+        match self.__iRODS__EXEC__RULE__addr__ {
+            Some(port) => {
+                #some_port
+            },
+            None => {
+                #no_port
+            }
+        }
+    };
 
     let dummy_int = write_tag("dummyInt", "0");
 
@@ -139,7 +162,7 @@ fn write_rhost_addr() -> proc_macro2::TokenStream {
     quote! {
         #start
 
-        #host_addr
+        #addr
         #rods_zone
         #port
         #dummy_int

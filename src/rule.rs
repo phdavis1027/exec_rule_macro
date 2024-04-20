@@ -85,7 +85,7 @@ impl Rule {
 
         let addr_field: Field = syn::parse_quote! {
             #[builder(setter(name = "addr"))]
-            pub __iRODS__EXEC__RULE__addr__: ::std::net::SocketAddr
+            pub __iRODS__EXEC__RULE__addr__: ::std::option::Option<::std::net::SocketAddr>
         };
 
         let instance_field: Field = syn::parse_quote! {
